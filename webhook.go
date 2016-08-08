@@ -12,6 +12,7 @@ import (
 func main() {
 	port := os.Getenv("PORT")
 	token := os.Getenv("GITHUB_TOKEN")
+	secret := os.Getenv("GITHUB_SECRET")
 	storyRepo := os.Getenv("STORY_REPO")
 
 	if port == "" {
@@ -33,5 +34,6 @@ func main() {
 		GitHubClient: gitHubClient,
 		Logger:       log.New(os.Stdout, "", log.LstdFlags),
 		StoryRepo:    storyRepo,
+		Secret:       []byte(secret),
 	}))
 }
