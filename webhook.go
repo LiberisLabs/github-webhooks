@@ -95,15 +95,22 @@ func (h *oauthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func mustGetenv(key string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		log.Fatalf("Require environment variable %q to be set", key)
+	}
+	return value
+}
+
 func main() {
 	port := os.Getenv("PORT")
-
 	secret := os.Getenv("GITHUB_WEBHOOK_SECRET")
-	storyRepo := os.Getenv("STORY_REPO")
 
-	oauthClientID := os.Getenv("OAUTH_CLIENT_ID")
-	oauthClientSecret := os.Getenv("OAUTH_CLIENT_SECRET")
-	oauthRedirectURL := os.Getenv("OAUTH_REDIRECT_URL")
+	storyRepo := mustGetenv("STORY_REPO")
+	oauthClientID := mustGetenv("OAUTH_CLIENT_ID")
+	oauthClientSecret := mustGetenv("OAUTH_CLIENT_SECRET")
+	oauthRedirectURL := mustGetenv("OAUTH_REDIRECT_URL")
 
 	if port == "" {
 		port = "8080"
