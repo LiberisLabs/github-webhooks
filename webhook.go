@@ -1,6 +1,10 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -10,25 +14,43 @@ import (
 	"github.com/LiberisLabs/github-webhooks/handlers"
 )
 
-var state = "rgerehureghurgehurge"
+func randomCode(length int) string {
+	b := make([]byte, length)
+	rand.Read(b)
+
+	return base64.StdEncoding.EncodeToString(b)
+}
 
 type oauthHandler struct {
 	clientID     string
 	clientSecret string
+	redirectURL  string
+	onSuccess    func(accessToken string) http.Handler
+
+	handler http.Handler
 }
 
 func (h *oauthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if h.handler != nil {
+		h.handler.ServeHTTP(w, r)
+		return
+	}
+
 	query := url.Values{}
 	query.Add("client_id", h.clientID)
-	query.Add("state", state)
-
-	callbackURL, _ := r.URL.Parse("/oauth/callback")
+	query.Add("redirect_uri", h.redirectURL+"/oauth/callback")
 
 	switch r.URL.Path {
-	case "/":
+	case "/oauth":
+		stateCookie, err := r.Cookie("state")
+		if err != nil || stateCookie == nil {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+
 		redirectURL, _ := url.Parse("https://github.com/login/oauth/authorize")
 
-		query.Add("redirect_uri", callbackURL.String())
+		query.Add("state", stateCookie.Value)
 		query.Add("scope", "repo")
 		query.Add("allow_signup", "false")
 
@@ -37,65 +59,75 @@ func (h *oauthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, redirectURL.String(), http.StatusFound)
 
 	case "/oauth/callback":
-		code := r.FormValue("code")
-
-		if r.FormValue("state") != state {
+		stateCookie, err := r.Cookie("state")
+		if err != nil || stateCookie == nil || stateCookie.Value != r.FormValue("state") {
+			http.Redirect(w, r, "/setup", http.StatusFound)
 			return
 		}
 
 		tokenURL := "https://github.com/login/oauth/access_token"
+		code := r.FormValue("code")
 
+		query.Add("state", stateCookie.Value)
 		query.Add("client_secret", h.clientSecret)
 		query.Add("code", code)
-		query.Add("redirect_uri", callbackURL.String())
 
-		resp, err := http.Post(tokenURL, "application/x-www-urlencoded-form", query.Encode())
+		resp, err := http.PostForm(tokenURL, query)
 		if err != nil {
+			fmt.Fprint(w, "PostForm:", err)
 			return
 		}
 
-		accessToken := resp.PostFormValue("access_token")
+		body, _ := ioutil.ReadAll(resp.Body)
+		form, _ := url.ParseQuery(string(body))
+
+		h.handler = h.onSuccess(form.Get("access_token"))
+		http.Redirect(w, r, "/", http.StatusFound)
+
+	default:
+		http.SetCookie(w, &http.Cookie{
+			Name:     "state",
+			Value:    randomCode(10),
+			HttpOnly: true,
+		})
+
+		http.Redirect(w, r, "/oauth", http.StatusFound)
 	}
 }
 
 func main() {
 	port := os.Getenv("PORT")
 
-	token := os.Getenv("GITHUB_TOKEN")
 	secret := os.Getenv("GITHUB_WEBHOOK_SECRET")
 	storyRepo := os.Getenv("STORY_REPO")
 
 	oauthClientID := os.Getenv("OAUTH_CLIENT_ID")
 	oauthClientSecret := os.Getenv("OAUTH_CLIENT_SECRET")
-	getAuth := os.Getenv("GET_AUTH")
+	oauthRedirectURL := os.Getenv("OAUTH_REDIRECT_URL")
 
 	if port == "" {
 		port = "8080"
 	}
 
-	if token == "" || storyRepo == "" {
-		log.Fatal("Must provide GITHUB_TOKEN and STORY_REPO environment variables")
-	}
-
-	gitHubClient := &github.Client{
-		Client:    http.DefaultClient,
-		Token:     token,
-		UserAgent: "gh-issues-flow golang",
-	}
-
 	log.Println("Listening on :" + port)
 
-	if getAuth != "" {
-		http.ListenAndServe(":"+port, &oauthHandler{
-			clientID:     oauthClientID,
-			clientSecret: oauthClientSecret,
-		})
-	} else {
-		http.ListenAndServe(":"+port, &handlers.Handler{
-			GitHubClient: gitHubClient,
-			Logger:       log.New(os.Stdout, "", log.LstdFlags),
-			StoryRepo:    storyRepo,
-			Secret:       []byte(secret),
-		})
-	}
+	http.ListenAndServe(":"+port, &oauthHandler{
+		clientID:     oauthClientID,
+		clientSecret: oauthClientSecret,
+		redirectURL:  oauthRedirectURL,
+		onSuccess: func(accessToken string) http.Handler {
+			gitHubClient := &github.Client{
+				Client:    http.DefaultClient,
+				Token:     accessToken,
+				UserAgent: "gh-issues-flow golang",
+			}
+
+			return &handlers.Handler{
+				GitHubClient: gitHubClient,
+				Logger:       log.New(os.Stdout, "", log.LstdFlags),
+				StoryRepo:    storyRepo,
+				Secret:       []byte(secret),
+			}
+		},
+	})
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"hash"
 	"io"
 	"io/ioutil"
@@ -22,6 +23,12 @@ type Handler struct {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		fmt.Fprint(w, "Ready...")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
 	event := r.Header.Get("X-GitHub-Event")
 
 	var body io.Reader = r.Body

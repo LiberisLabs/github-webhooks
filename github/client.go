@@ -28,7 +28,7 @@ func (c *Client) newRequest(method, urlStr string, body interface{}) (*http.Requ
 	}
 
 	req.Header.Add("Accept", acceptMediaType)
-	req.Header.Add("Authorization", "Bearer "+c.Token)
+	req.Header.Add("Authorization", "token "+c.Token)
 	req.Header.Add("User-Agent", c.UserAgent)
 
 	return req, nil
