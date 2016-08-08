@@ -126,7 +126,7 @@ func main() {
 			gitHubClient := &github.Client{
 				Client:    http.DefaultClient,
 				Token:     accessToken,
-				UserAgent: "gh-issues-flow golang",
+				UserAgent: "github.com/LiberisLabs/github-webhooks golang",
 			}
 
 			return &handlers.Handler{
