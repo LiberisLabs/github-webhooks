@@ -12,6 +12,7 @@ import (
 
 	"github.com/LiberisLabs/github-webhooks/github"
 	"github.com/LiberisLabs/github-webhooks/handlers"
+	"github.com/gorilla/securecookie"
 )
 
 func randomCode(length int) string {
@@ -25,6 +26,7 @@ type oauthHandler struct {
 	clientID     string
 	clientSecret string
 	redirectURL  string
+	secureCookie *securecookie.SecureCookie
 	onSuccess    func(accessToken string) http.Handler
 
 	handler http.Handler
@@ -42,15 +44,15 @@ func (h *oauthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch r.URL.Path {
 	case "/oauth":
-		stateCookie, err := r.Cookie("state")
-		if err != nil || stateCookie == nil {
+		expectedState, err := getSecureCookie(h.secureCookie, r, "state")
+		if err != nil {
 			http.Redirect(w, r, "/", http.StatusFound)
 			return
 		}
 
 		redirectURL, _ := url.Parse("https://github.com/login/oauth/authorize")
 
-		query.Add("state", stateCookie.Value)
+		query.Add("state", expectedState)
 		query.Add("scope", "repo")
 		query.Add("allow_signup", "false")
 
@@ -59,8 +61,8 @@ func (h *oauthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, redirectURL.String(), http.StatusFound)
 
 	case "/oauth/callback":
-		stateCookie, err := r.Cookie("state")
-		if err != nil || stateCookie == nil || stateCookie.Value != r.FormValue("state") {
+		expectedState, err := getSecureCookie(h.secureCookie, r, "state")
+		if err != nil || expectedState != r.FormValue("state") {
 			http.Redirect(w, r, "/setup", http.StatusFound)
 			return
 		}
@@ -68,7 +70,7 @@ func (h *oauthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		tokenURL := "https://github.com/login/oauth/access_token"
 		code := r.FormValue("code")
 
-		query.Add("state", stateCookie.Value)
+		query.Add("state", expectedState)
 		query.Add("client_secret", h.clientSecret)
 		query.Add("code", code)
 
@@ -85,14 +87,36 @@ func (h *oauthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusFound)
 
 	default:
-		http.SetCookie(w, &http.Cookie{
-			Name:     "state",
-			Value:    randomCode(10),
-			HttpOnly: true,
-		})
-
-		http.Redirect(w, r, "/oauth", http.StatusFound)
+		if err := setSecureCookie(h.secureCookie, w, "state", randomCode(10)); err == nil {
+			http.Redirect(w, r, "/oauth", http.StatusFound)
+		}
 	}
+}
+
+func getSecureCookie(s *securecookie.SecureCookie, r *http.Request, name string) (string, error) {
+	cookie, err := r.Cookie(name)
+	if err != nil {
+		return "", err
+	}
+
+	var value string
+	err = s.Decode(name, cookie.Value, &value)
+	return value, err
+}
+
+func setSecureCookie(s *securecookie.SecureCookie, w http.ResponseWriter, name, value string) error {
+	encoded, err := s.Encode(name, value)
+	if err != nil {
+		return err
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     name,
+		Value:    encoded,
+		HttpOnly: true,
+	})
+
+	return nil
 }
 
 func mustGetenv(key string) string {
@@ -106,6 +130,12 @@ func mustGetenv(key string) string {
 func main() {
 	port := os.Getenv("PORT")
 	secret := os.Getenv("GITHUB_WEBHOOK_SECRET")
+
+	hashKey := []byte(mustGetenv("COOKIE_HASH_KEY"))
+	blockKey := []byte(os.Getenv("COOKIE_BLOCK_KEY"))
+	if len(blockKey) == 0 {
+		blockKey = nil
+	}
 
 	storyRepo := mustGetenv("STORY_REPO")
 	oauthClientID := mustGetenv("OAUTH_CLIENT_ID")
@@ -122,6 +152,7 @@ func main() {
 		clientID:     oauthClientID,
 		clientSecret: oauthClientSecret,
 		redirectURL:  oauthRedirectURL,
+		secureCookie: securecookie.New(hashKey, blockKey),
 		onSuccess: func(accessToken string) http.Handler {
 			gitHubClient := &github.Client{
 				Client:    http.DefaultClient,
