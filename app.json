@@ -1,0 +1,14 @@
+{
+  "name": "github-webhooks",
+  "description": "Webhooks for GitHub to increase FinTech",
+  "keywords": [
+    "go",
+    "github",
+    "webhooks",
+    "fintech"
+  ],
+  "image": "heroku/go:1.6",
+  "mount_dir": "src/github.com/LiberisLabs/github-webhooks",
+  "website": "https://github.com/LiberisLabs/github-webhooks",
+  "repository": "https://github.com/LiberisLabs/github-webhooks"
+}
