@@ -52,7 +52,7 @@ func (h *oauthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		redirectURL, _ := url.Parse("https://github.com/login/oauth/authorize")
 
 		query.Add("state", stateCookie.Value)
-		query.Add("scope", "repo")
+		query.Add("scope", "repo read:repo_hook write:repo_hook")
 		query.Add("allow_signup", "false")
 
 		redirectURL.RawQuery = query.Encode()
