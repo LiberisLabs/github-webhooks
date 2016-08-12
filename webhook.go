@@ -170,7 +170,7 @@ func main() {
 
 			logger := log.New(os.Stdout, "", log.LstdFlags)
 
-			installWebhook(gitHubClient, oauthRedirectURL, strings.SplitN(storyRepo, "/", 2)[0], secret, logger)
+			go installWebhook(gitHubClient, oauthRedirectURL, strings.SplitN(storyRepo, "/", 2)[0], secret, logger)
 
 			return &handlers.Handler{
 				GitHubClient: gitHubClient,
