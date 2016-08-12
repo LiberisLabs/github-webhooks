@@ -152,6 +152,9 @@ func main() {
 	oauthRedirectURL := mustGetenv("OAUTH_REDIRECT_URL")
 
 	if port == "" {
+		port = os.Getenv("HTTP_PLATFORM_PORT")
+	}
+	if port == "" {
 		port = "8080"
 	}
 
