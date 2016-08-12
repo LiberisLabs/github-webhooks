@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/LiberisLabs/github-webhooks/github"
 	"github.com/LiberisLabs/github-webhooks/handlers"
@@ -51,7 +52,7 @@ func (h *oauthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		redirectURL, _ := url.Parse("https://github.com/login/oauth/authorize")
 
 		query.Add("state", stateCookie.Value)
-		query.Add("scope", "repo")
+		query.Add("scope", "repo read:repo_hook write:repo_hook")
 		query.Add("allow_signup", "false")
 
 		redirectURL.RawQuery = query.Encode()
@@ -103,6 +104,44 @@ func mustGetenv(key string) string {
 	return value
 }
 
+func installWebhook(c *github.Client, webhookURL, organization, secret string, logger *log.Logger) error {
+	repos, err := c.ListRepositories(organization)
+	if err != nil {
+		return err
+	}
+
+	for _, repo := range repos {
+		hooks, _ := c.GetHooks(repo.HooksURL)
+		alreadyInstalled := false
+
+		for _, hook := range hooks {
+			if hook.Config.URL == webhookURL {
+				alreadyInstalled = true
+				break
+			}
+		}
+
+		if !alreadyInstalled {
+			logger.Printf("Installing webhook to %s", repo.FullName)
+
+			c.CreateHook(repo.HooksURL, github.Hook{
+				Active: true,
+				Name:   "web",
+				Events: []string{"issues"},
+				Config: github.HookConfig{
+					URL:         webhookURL,
+					ContentType: "json",
+					Secret:      secret,
+				},
+			})
+		} else {
+			logger.Printf("Webhook already installed to %s", repo.FullName)
+		}
+	}
+
+	return nil
+}
+
 func main() {
 	port := os.Getenv("PORT")
 	secret := os.Getenv("GITHUB_WEBHOOK_SECRET")
@@ -129,9 +168,13 @@ func main() {
 				UserAgent: "github.com/LiberisLabs/github-webhooks golang",
 			}
 
+			logger := log.New(os.Stdout, "", log.LstdFlags)
+
+			go installWebhook(gitHubClient, oauthRedirectURL, strings.SplitN(storyRepo, "/", 2)[0], secret, logger)
+
 			return &handlers.Handler{
 				GitHubClient: gitHubClient,
-				Logger:       log.New(os.Stdout, "", log.LstdFlags),
+				Logger:       logger,
 				StoryRepo:    storyRepo,
 				Secret:       []byte(secret),
 			}

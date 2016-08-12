@@ -3,6 +3,7 @@ package github
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 )
 
@@ -76,5 +77,39 @@ func (c *Client) UpdateIssue(issueURL string, update IssueUpdate) error {
 	}
 
 	_, err = c.do(req, nil)
+	return err
+}
+
+func (c *Client) ListRepositories(organization string) ([]*Repository, error) {
+	var repos []*Repository
+
+	req, err := c.newRequest("GET", fmt.Sprintf("https://api.github.com/orgs/%s/repos", organization), nil)
+	if err != nil {
+		return repos, err
+	}
+
+	_, err = c.do(req, &repos)
+	return repos, err
+}
+
+func (c *Client) GetHooks(hooksURL string) ([]*Hook, error) {
+	var hooks []*Hook
+
+	req, err := c.newRequest("GET", hooksURL, nil)
+	if err != nil {
+		return hooks, err
+	}
+
+	_, err = c.do(req, &hooks)
+	return hooks, err
+}
+
+func (c *Client) CreateHook(hooksURL string, hook Hook) error {
+	req, err := c.newRequest("POST", hooksURL, &hook)
+	if err != nil {
+		return err
+	}
+	_, err = c.do(req, nil)
+
 	return err
 }
