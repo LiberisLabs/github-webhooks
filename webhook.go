@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/LiberisLabs/github-webhooks/github"
 	"github.com/LiberisLabs/github-webhooks/handlers"
@@ -128,6 +129,8 @@ func main() {
 				Token:     accessToken,
 				UserAgent: "github.com/LiberisLabs/github-webhooks golang",
 			}
+
+			gitHubClient.InstallWebhook(oauthRedirectURL, strings.SplitN(storyRepo, "/", 2)[0], secret)
 
 			return &handlers.Handler{
 				GitHubClient: gitHubClient,

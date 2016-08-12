@@ -22,6 +22,7 @@ type Repository struct {
 	Name     string `json:"name"`
 	FullName string `json:"full_name"`
 	Owner    *Owner `json:"owner"`
+	HooksURL string `json:"hooks_url"`
 }
 
 type Owner struct {
@@ -36,4 +37,17 @@ type Label struct {
 
 type IssueUpdate struct {
 	Body string `json:"body"`
+}
+
+type Hook struct {
+	Name   string     `json:"name"`
+	Active bool       `json:"active"`
+	Events []string   `json:"events"`
+	Config HookConfig `json:"config"`
+}
+
+type HookConfig struct {
+	URL         string `json:"url"`
+	ContentType string `json:"content_type"`
+	Secret      string `json:"secret"`
 }
