@@ -104,40 +104,6 @@ func (c *Client) GetHooks(hooksURL string) ([]*Hook, error) {
 	return hooks, err
 }
 
-func (c *Client) InstallWebhook(webhookURL, organization, secret string) error {
-	repos, err := c.ListRepositories(organization)
-	if err != nil {
-		return err
-	}
-
-	for _, repo := range repos {
-		hooks, _ := c.GetHooks(repo.HooksURL)
-		alreadyInstalled := false
-
-		for _, hook := range hooks {
-			if hook.Config.URL == webhookURL {
-				alreadyInstalled = true
-				break
-			}
-		}
-
-		if !alreadyInstalled {
-			c.CreateHook(repo.HooksURL, Hook{
-				Active: true,
-				Name:   "web",
-				Events: []string{"issues"},
-				Config: HookConfig{
-					URL:         webhookURL,
-					ContentType: "json",
-					Secret:      secret,
-				},
-			})
-		}
-	}
-
-	return nil
-}
-
 func (c *Client) CreateHook(hooksURL string, hook Hook) error {
 	req, err := c.newRequest("POST", hooksURL, &hook)
 	if err != nil {
