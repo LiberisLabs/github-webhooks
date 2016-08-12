@@ -186,7 +186,9 @@ func main() {
 
 			if keepAliveTimeout != "" {
 				dur, err := time.ParseDuration(keepAliveTimeout)
-				if err == nil {
+				if err != nil {
+					logger.Println("keepAlive:", err)
+				} else {
 					go keepAlive(oauthRedirectURL, dur)
 				}
 			}
