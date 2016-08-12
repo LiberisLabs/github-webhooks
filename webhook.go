@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/LiberisLabs/github-webhooks/github"
 	"github.com/LiberisLabs/github-webhooks/handlers"
@@ -142,6 +143,12 @@ func installWebhook(c *github.Client, webhookURL, organization, secret string, l
 	return nil
 }
 
+func keepAlive(url string, dur time.Duration) {
+	for _ = range time.Tick(dur) {
+		http.Get(url)
+	}
+}
+
 func main() {
 	port := os.Getenv("PORT")
 	secret := os.Getenv("GITHUB_WEBHOOK_SECRET")
@@ -150,6 +157,8 @@ func main() {
 	oauthClientID := mustGetenv("OAUTH_CLIENT_ID")
 	oauthClientSecret := mustGetenv("OAUTH_CLIENT_SECRET")
 	oauthRedirectURL := mustGetenv("OAUTH_REDIRECT_URL")
+
+	keepAliveTimeout := os.Getenv("KEEP_ALIVE_TIMEOUT")
 
 	if port == "" {
 		port = os.Getenv("HTTP_PLATFORM_PORT")
@@ -174,6 +183,13 @@ func main() {
 			logger := log.New(os.Stdout, "", log.LstdFlags)
 
 			go installWebhook(gitHubClient, oauthRedirectURL, strings.SplitN(storyRepo, "/", 2)[0], secret, logger)
+
+			if keepAliveTimeout != "" {
+				dur, err := time.ParseDuration(keepAliveTimeout)
+				if err == nil {
+					go keepAlive(oauthRedirectURL, dur)
+				}
+			}
 
 			return &handlers.Handler{
 				GitHubClient: gitHubClient,
