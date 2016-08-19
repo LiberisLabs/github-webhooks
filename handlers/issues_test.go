@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"testing"
@@ -74,6 +75,67 @@ func TestIssues(t *testing.T) {
 			Title:  "This great task",
 			Number: 5,
 			Body:   "## [Story](" + storyURL + ")\n\nWell this is a great task.",
+		},
+		Repository: &github.Repository{
+			Name: "something",
+			Owner: &github.Owner{
+				Login: "example",
+			},
+		},
+	}
+
+	handleIssues(storyRepo, githubClient, logger, event)
+
+	if githubClient.getIssue.issueURL != storyApiURL {
+		t.Errorf("GetIssue(...) was not called with the correct arguments\n     was\t%#v\nexpected\t%#v",
+			githubClient.getIssue.issueURL, storyApiURL)
+	}
+
+	if githubClient.updateIssue.issueURL != githubClient.issue.URL {
+		t.Errorf("UpdateIssue(...) was not called with the correct arguments\n     was\t%#v\nexpected\t%#v",
+			githubClient.updateIssue.issueURL, githubClient.issue.URL)
+	}
+
+	if githubClient.updateIssue.update.Body != expectedNewBody {
+		t.Errorf("UpdateIssue(...) was not called with the correct arguments\n     was\t%#v\nexpected\t%#v",
+			githubClient.updateIssue.update, github.IssueUpdate{Body: expectedNewBody})
+	}
+}
+
+func TestIssuesWhenShortURLToStory(t *testing.T) {
+	storyRepo := "example/test"
+	storyNumber := 5
+	storyApiURL := fmt.Sprintf("https://api.github.com/repos/%s/issues/%d", storyRepo, storyNumber)
+
+	body := `## Tasks
+
+- [ ] This other task (example/something#1)
+- [ ] This great task (example/something#5)
+- [x] And a task I've already done (example/something#6)
+`
+	expectedNewBody := `## Tasks
+
+- [ ] This other task (example/something#1)
+- [x] This great task (example/something#5)
+- [x] And a task I've already done (example/something#6)
+`
+
+	githubClient := &mockGitHubClient{
+		issue: &github.Issue{
+			URL:    "http://example.com",
+			ID:     2,
+			Number: 3,
+			Title:  "A cool issue",
+			State:  "open",
+			Body:   body,
+		},
+	}
+	event := github.IssueEvent{
+		Action: "closed",
+		Issue: &github.Issue{
+			Title:  "This great task",
+			Number: 5,
+			Body:   fmt.Sprintf("This does a fix for %s#%d ok?\n\nWell this is a great task.", storyRepo, storyNumber),
 		},
 		Repository: &github.Repository{
 			Name: "something",

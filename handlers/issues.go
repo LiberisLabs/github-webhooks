@@ -42,16 +42,20 @@ func handleIssues(storyRepo string, githubClient issueClient, logger *log.Logger
 }
 
 func findStory(storyRepo, body string) string {
-	pattern := fmt.Sprintf(`https://github.com/%s/issues/(\d)`, storyRepo)
+	pattern := fmt.Sprintf(`https://github.com/%s/issues/(\d)|%s#(\d)`, storyRepo, storyRepo)
 	expr := regexp.MustCompile(pattern)
 	matches := expr.FindStringSubmatch(body)
 
-	if len(matches) != 2 {
+	if matches == nil {
 		return ""
 	}
 
-	return fmt.Sprintf("https://api.github.com/repos/%s/issues/%s",
-		storyRepo, matches[1])
+	storyNumber := matches[1]
+	if matches[1] == "" {
+		storyNumber = matches[2]
+	}
+
+	return fmt.Sprintf("https://api.github.com/repos/%s/issues/%s", storyRepo, storyNumber)
 }
 
 func tickReferencedIssue(body, owner, repo string, number int) string {
